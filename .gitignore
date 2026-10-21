@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.vercel/
+.output/
+.turbo/
+coverage/
+*.tsbuildinfo
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Local assistant context may contain personal or machine-specific details.
+/AGENTS.md
+/agents.md
+/CLAUDE_CONTEXT.md
