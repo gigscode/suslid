@@ -99,7 +99,7 @@ function requestPinned(url: URL, address: string, family: number): Promise<{ sta
       headers: {
         Accept: 'text/html',
         'Accept-Encoding': 'identity',
-        'User-Agent': 'PitchPilotResearch/1.0 (+public website page analysis)',
+        'User-Agent': 'SusLidResearch/1.0 (+public website page analysis)',
       },
       lookup: (_hostname, _options, callback) => callback(null, address, family),
     }, (response) => {

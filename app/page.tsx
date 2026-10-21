@@ -79,7 +79,7 @@ export default function HomePage() {
 
       <section id="how-it-works" className="border-y border-slate-200 bg-white py-14 sm:py-20">
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-800">A useful first step</p><h2 className="mt-3 font-serif text-3xl font-medium tracking-tight sm:text-4xl">Less guesswork. More considered outreach.</h2><p className="mt-4 text-base leading-7 text-slate-600">PitchPilot turns one public page into a starting point for a human conversation. You stay in control of what gets sent.</p></div>
+          <div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-800">A useful first step</p><h2 className="mt-3 font-serif text-3xl font-medium tracking-tight sm:text-4xl">Less guesswork. More considered outreach.</h2><p className="mt-4 text-base leading-7 text-slate-600">SusLid turns one public page into a starting point for a human conversation. You stay in control of what gets sent.</p></div>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {steps.map((step) => <article key={step.number} className="rounded-2xl border border-slate-200 bg-[#fbfaf7] p-5 sm:p-7"><span className="font-serif text-3xl text-teal-800">{step.number}</span><h3 className="mt-5 text-lg font-semibold">{step.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{step.body}</p></article>)}
           </div>

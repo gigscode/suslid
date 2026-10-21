@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { PitchPilotWorkspace } from '@/components/pitchpilot-workspace'
 import { createClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 const profileFields = 'agency_name, agency_type, services, target_markets, ideal_client_description, preferred_outreach_channel, offer_description'
 
 export default async function AppPage() {
@@ -39,7 +41,7 @@ export default async function AppPage() {
   return (
     <>
       {loadError && <div role="alert" className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950">
-        PitchPilot data is not ready. Apply the migration in <code>supabase/migrations</code> to your separate PitchPilot Supabase project, then reload.
+        SusLid data is not ready. Apply the migrations in <code>supabase/migrations</code> to your Supabase project, then reload.
       </div>}
       <PitchPilotWorkspace
         initialProfile={agencyProfile}
