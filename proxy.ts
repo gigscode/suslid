@@ -4,6 +4,10 @@ import { getSupabaseConfig } from './lib/supabase/config'
 import type { Database } from './lib/supabase/database.types'
 
 export async function proxy(request: NextRequest) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()) {
+    return NextResponse.next({ request })
+  }
+
   const { url, publishableKey } = getSupabaseConfig()
   let response = NextResponse.next({ request })
 

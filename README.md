@@ -38,6 +38,8 @@ The repository contains older Remosus migrations. To avoid creating unused caree
 
 Preview deployments can run the app without Gemini configured, but analysis will return a configuration error until `GEMINI_API_KEY` is set. Use test data and a test Supabase project for previews.
 
+If Supabase environment variables are missing, the public landing and login pages still render. Sign-in and the authenticated workspace require `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+
 ## Environment variables
 
 | Variable | Required for | Exposure |
