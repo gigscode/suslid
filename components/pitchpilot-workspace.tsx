@@ -12,6 +12,9 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { LeadDiscovery } from '@/components/lead-discovery'
+import { OutreachView } from '@/components/views/outreach-view'
+import { PipelineView } from '@/components/views/pipeline-view'
+import { ActivityView } from '@/components/views/activity-view'
 import type { DiscoveredLead } from '@/app/api/leads/discover/route'
 
 type Prospect = Database['public']['Tables']['prospects']['Row']
@@ -143,9 +146,10 @@ function Sidebar({ active, onNavigate, agencyName, onSignOut }: {
   return (
     <aside className="flex h-full flex-col bg-[#0B3C37] text-white">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-6">
-        <div className="flex size-9 items-center justify-center rounded-xl bg-white/15 text-base font-bold">S</div>
-        <span className="text-lg font-bold tracking-tight">{brand.name}</span>
+      <div className="flex items-center gap-2 px-6 py-6">
+        <span className="text-xl font-extrabold tracking-[-0.02em] text-white leading-none">Sus</span>
+        <span className="text-xl font-extrabold tracking-[-0.02em] text-white/80 leading-none">Lid</span>
+        <span className="text-2xl font-black text-[#E53E3E] leading-none" style={{ lineHeight: 0.7 }}>.</span>
       </div>
 
       {/* Nav groups */}
@@ -746,22 +750,22 @@ export function PitchPilotWorkspace({
       <div className="flex flex-1 flex-col overflow-hidden">
 
         {/* Top bar */}
-        <header className="flex items-center gap-4 border-b border-[#E5E7EB] bg-white px-6 py-4">
+        <header className="flex items-center gap-3 border-b border-[#E5E7EB] bg-white px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
           {/* Mobile menu toggle */}
           <button
             type="button"
-            className="flex size-9 items-center justify-center rounded-xl border border-[#E5E7EB] lg:hidden"
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[#E5E7EB] lg:hidden"
             onClick={() => setMobileSidebarOpen(true)}
             aria-label="Open navigation"
           >☰</button>
 
-          {/* Welcome */}
-          <div className="flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9CA3AF]">Prospect workspace</p>
-            <h1 className="text-lg font-bold text-[#111827]">Welcome, {profile.agency_name}!</h1>
+          {/* Welcome — truncates gracefully on mobile */}
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9CA3AF]">Prospect workspace</p>
+            <h1 className="truncate text-base font-bold text-[#111827] sm:text-lg">Welcome, {profile.agency_name}!</h1>
           </div>
 
-          {/* Search */}
+          {/* Search — hidden on small, visible md+ */}
           <div className="hidden max-w-xs flex-1 md:block">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]">🔍</span>
@@ -775,7 +779,7 @@ export function PitchPilotWorkspace({
           </div>
 
           {/* Right utilities */}
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <button
               type="button"
               onClick={() => setShowPricingModal(true)}
@@ -784,8 +788,8 @@ export function PitchPilotWorkspace({
               <span className="capitalize">{plan}</span>
               {plan === 'free' && <span className="text-[#0B3C37]">↑ Upgrade</span>}
             </button>
-            <div className="hidden text-right sm:block">
-              <p className="text-xs font-semibold text-[#111827]">{profile.agency_name}</p>
+            <div className="hidden text-right lg:block">
+              <p className="max-w-[120px] truncate text-xs font-semibold text-[#111827]">{profile.agency_name}</p>
               <p className="text-[10px] text-[#9CA3AF]">{userEmail}</p>
             </div>
             <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#0B3C37] text-xs font-bold text-white">
@@ -812,13 +816,13 @@ export function PitchPilotWorkspace({
           {/* ── Dashboard view: metrics + charts only ── */}
           {activeNav === 'dashboard' && (
             <>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard label="Prospects saved" value={prospects.length} badge={`+${prospects.filter(p => new Date(p.created_at) > new Date(Date.now() - 30*86400000)).length} this month`} bg="bg-[#E2F4C5]" textColor="text-[#2D5016]" icon="◎" />
                 <MetricCard label="Pages inspected" value={analysedCount} badge={`${Math.round(analysedCount / Math.max(prospects.length, 1) * 100)}% coverage`} bg="bg-[#C1EBE1]" textColor="text-[#0D4034]" icon="🔍" />
                 <MetricCard label="Follow-ups due" value={dueCount} badge={dueCount > 0 ? 'Action needed' : 'All clear'} bg="bg-[#FCD2D1]" textColor="text-[#7A1C1A]" icon="⏰" />
                 <MetricCard label="Drafts created" value={drafts.length} badge={`${new Set(drafts.map(d => d.prospect_id)).size} prospects`} bg="bg-[#D3D6FC]" textColor="text-[#2A2A7A]" icon="✉" />
               </div>
-              <div className="mt-5 grid gap-5 lg:grid-cols-[2fr_3fr]">
+              <div className="mt-5 grid gap-5 grid-cols-1 lg:grid-cols-[2fr_3fr]">
                 <DonutChart data={pipelineData.length ? pipelineData : [{ name: 'No data yet', value: 1 }]} />
                 <SalesBarChart data={barData} />
               </div>
@@ -850,8 +854,57 @@ export function PitchPilotWorkspace({
             </>
           )}
 
+          {/* ── Outreach view ── */}
+          {activeNav === 'outreach' && (
+            <OutreachView
+              drafts={drafts}
+              prospects={prospects}
+              onSaveDraft={saveDraft}
+              onOpenProspect={(id) => { setSelectedId(id); setAnalysis(initialAnalyses.map(parseStoredAnalysis).find((a) => a?.prospect_id === id) ?? null); setActiveNav('prospects') }}
+            />
+          )}
+
+          {/* ── Pipeline view ── */}
+          {activeNav === 'pipeline' && (
+            <PipelineView
+              prospects={prospects}
+              onStageChange={async (prospectId, newStatus) => {
+                const response = await fetch(`/api/prospects/${prospectId}`, {
+                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: newStatus }),
+                })
+                if (!response.ok) { setNotice(await responseError(response)); return }
+                setProspects((cur) => cur.map((p) => p.id === prospectId ? { ...p, status: newStatus } : p))
+              }}
+              onOpenProspect={(id) => { setSelectedId(id); setAnalysis(initialAnalyses.map(parseStoredAnalysis).find((a) => a?.prospect_id === id) ?? null); setActiveNav('prospects') }}
+            />
+          )}
+
+          {/* ── Activity view ── */}
+          {activeNav === 'activity' && (
+            <ActivityView
+              activities={activities}
+              prospects={prospects}
+              onAddFollowUp={async (prospectId, notes, dueAt) => {
+                const response = await fetch('/api/activities', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ prospect_id: prospectId, notes, due_at: dueAt }),
+                })
+                if (!response.ok) throw new Error(await responseError(response))
+                const data = record(await response.json()) as Record<string, unknown> | null
+                const activity = parseActivity(data?.activity)
+                if (activity) {
+                  setActivities((cur) => [activity, ...cur])
+                  if (activity.due_at) setProspects((cur) => cur.map((p) => p.id === prospectId ? { ...p, next_follow_up_at: activity.due_at } : p))
+                  setNotice('Follow-up saved.')
+                }
+              }}
+              onOpenProspect={(id) => { setSelectedId(id); setAnalysis(initialAnalyses.map(parseStoredAnalysis).find((a) => a?.prospect_id === id) ?? null); setActiveNav('prospects') }}
+            />
+          )}
+
           {/* ── Prospects view: list + detail ── */}
-          {(activeNav === 'prospects' || activeNav === 'outreach' || activeNav === 'pipeline' || activeNav === 'activity') && (
+          {activeNav === 'prospects' && (
           <div className="grid items-start gap-5 xl:grid-cols-[320px_1fr]">
 
             {/* Prospect list */}
@@ -920,6 +973,18 @@ export function PitchPilotWorkspace({
                         <span className="font-semibold">Ready to inspect.</span> Click &ldquo;Inspect website&rdquo; to fetch the page, extract observations, and generate a personalised outreach draft.
                       </div>
                     )}
+
+                    {/* How inspect works */}
+                    <details className="mt-3 rounded-xl border border-[#E5E7EB] bg-[#F4F8F8] px-4 py-3 text-xs text-[#6B7280]">
+                      <summary className="cursor-pointer font-semibold text-[#374151] select-none">How does &ldquo;Inspect website&rdquo; work?</summary>
+                      <ul className="mt-2 space-y-1.5 leading-5">
+                        <li>1. We fetch the public homepage (no login, no scraping private data).</li>
+                        <li>2. Scripts and ads are stripped. Clean text, headings and meta tags are extracted.</li>
+                        <li>3. Gemini AI analyses the text and returns observations grounded in verbatim quotes from the page.</li>
+                        <li>4. A personalised email + DM draft is generated based on the findings and your agency profile.</li>
+                        <li>5. Everything is saved to this prospect. You edit and send manually.</li>
+                      </ul>
+                    </details>
 
                     <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-[#E5E7EB] pt-5">
                       <button type="button" className={btnPrimary} disabled={working || !selected.website_url} onClick={() => { void analyze().catch((e: unknown) => setNotice(e instanceof Error ? e.message : 'Analyze failed.')) }}>

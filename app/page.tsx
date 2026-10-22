@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BrandLogo } from '@/components/brand-logo'
 import { brand } from '@/lib/pitchpilot/brand'
 
 const features = [
@@ -36,19 +37,18 @@ export default function HomePage() {
     <main className="min-h-screen overflow-hidden bg-[#F4F8F8] text-[#111827]">
 
       {/* ── Nav ── */}
-      <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
-        <Link href="/" className="flex items-center gap-2.5">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-[#0B3C37] text-sm font-bold text-white">S</span>
-          <span className="text-xl font-bold tracking-tight text-[#111827]">{brand.name}</span>
-        </Link>
-        <nav className="flex items-center gap-3 sm:gap-6">
-          <a href="#how-it-works" className="hidden text-sm font-medium text-[#6B7280] hover:text-[#111827] sm:inline">How it works</a>
-          <a href="#pricing" className="text-sm font-medium text-[#6B7280] hover:text-[#111827]">Pricing</a>
-          <Link href="/login" className="text-sm font-medium text-[#6B7280] hover:text-[#111827]">Sign in</Link>
-          <Link href="/login?mode=sign-up" className="rounded-full bg-[#0B3C37] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0d4a44]">
-            Start free
-          </Link>
-        </nav>
+      <header className="sticky top-0 z-40 w-full border-b border-[#E5E7EB] bg-[#F4F8F8]/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
+          <BrandLogo size="md" />
+          <nav className="flex items-center gap-3 sm:gap-5">
+            <a href="#how-it-works" className="hidden text-sm font-medium text-[#6B7280] hover:text-[#111827] sm:inline">How it works</a>
+            <a href="#pricing" className="text-sm font-medium text-[#6B7280] hover:text-[#111827]">Pricing</a>
+            <Link href="/login" className="text-sm font-medium text-[#6B7280] hover:text-[#111827]">Sign in</Link>
+            <Link href="/login?mode=sign-up" className="rounded-full bg-[#0B3C37] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#0d4a44]">
+              Start free
+            </Link>
+          </nav>
+        </div>
       </header>
 
       {/* ── Hero ── */}

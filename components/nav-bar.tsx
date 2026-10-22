@@ -1,16 +1,39 @@
 import Link from 'next/link'
-import { brand } from '@/lib/pitchpilot/brand'
+import { BrandLogo } from '@/components/brand-logo'
 
 export function NavBar() {
   return (
-    <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
-      <Link href="/" aria-label={`${brand.name} home`} className="font-serif text-2xl font-semibold tracking-tight">
-        {brand.name}<span className="ml-1 text-teal-800">.</span>
-      </Link>
-      <nav aria-label="Main navigation" className="flex items-center gap-4">
-        <Link href="/" className="hidden text-sm font-medium text-slate-600 hover:text-slate-950 sm:inline">Home</Link>
-        <Link href="/login?mode=sign-up" className="rounded-full bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-800">Create account</Link>
-      </nav>
+    <header className="sticky top-0 z-40 w-full border-b border-[#E5E7EB] bg-white/90 backdrop-blur-md">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
+        <BrandLogo size="md" />
+
+        <nav aria-label="Main navigation" className="flex items-center gap-2 sm:gap-5">
+          <Link
+            href="/#how-it-works"
+            className="hidden text-sm font-medium text-[#6B7280] transition hover:text-[#111827] sm:inline"
+          >
+            How it works
+          </Link>
+          <Link
+            href="/#pricing"
+            className="hidden text-sm font-medium text-[#6B7280] transition hover:text-[#111827] sm:inline"
+          >
+            Pricing
+          </Link>
+          <Link
+            href="/login"
+            className="text-sm font-medium text-[#6B7280] transition hover:text-[#111827]"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/login?mode=sign-up"
+            className="rounded-full bg-[#0B3C37] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#0d4a44] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B3C37]"
+          >
+            Start free
+          </Link>
+        </nav>
+      </div>
     </header>
   )
 }
