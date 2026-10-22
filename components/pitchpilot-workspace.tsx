@@ -11,6 +11,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
+import { LeadDiscovery } from '@/components/lead-discovery'
+import type { DiscoveredLead } from '@/app/api/leads/discover/route'
 
 type Prospect = Database['public']['Tables']['prospects']['Row']
 type Draft = Database['public']['Tables']['outreach_drafts']['Row']
@@ -113,6 +115,7 @@ const NAV_GROUPS = [
     items: [
       { id: 'dashboard', icon: '⊞', label: 'Dashboard' },
       { id: 'prospects', icon: '◎', label: 'Prospects' },
+      { id: 'discover', icon: '🔭', label: 'Discover leads' },
       { id: 'outreach', icon: '✉', label: 'Outreach' },
     ],
   },
@@ -615,6 +618,9 @@ export function PitchPilotWorkspace({
       })
       if (!response.ok) {
         const errPayload = record(await response.json().catch(() => null))
+        if (response.status === 503 && typeof errPayload?.error === 'string' && errPayload.error.includes('Gemini')) {
+          throw new Error('GEMINI_API_KEY is not set in your .env.local file. Add it to enable website analysis.')
+        }
         if (response.status === 403 || errPayload?.code === 'LIMIT_REACHED') {
           setShowPricingModal(true)
           throw new Error(typeof errPayload?.error === 'string' ? errPayload.error : 'Monthly limit reached. Upgrade to continue.')
@@ -672,6 +678,36 @@ export function PitchPilotWorkspace({
     } catch (e) {
       setNotice(e instanceof Error ? e.message : 'Could not save follow-up.')
     } finally { setWorking(false) }
+  }
+
+  async function saveDiscoveredLead(lead: DiscoveredLead) {
+    const payload = {
+      business_name: lead.title.slice(0, 160),
+      website_url: lead.url,
+      country: '',
+      industry: '',
+      contact_name: '',
+      contact_email: '',
+      notes: lead.snippet ? `Discovered via search.\n\n${lead.snippet}` : 'Discovered via lead search.',
+    }
+    const response = await fetch('/api/prospects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!response.ok) {
+      const err = await response.json().catch(() => null) as Record<string, unknown> | null
+      throw new Error(typeof err?.error === 'string' ? err.error : 'Could not save this lead.')
+    }
+    const data = await response.json() as Record<string, unknown>
+    const saved = parseProspect(data?.prospect)
+    if (saved) {
+      const createdActivity = parseActivity(data?.activity)
+      setProspects((cur) => [saved, ...cur])
+      if (createdActivity) setActivities((cur) => [createdActivity, ...cur])
+      setSelectedId(saved.id)
+      setNotice(`${saved.business_name} saved as a prospect.`)
+    }
   }
 
   async function signOut() {
@@ -768,22 +804,55 @@ export function PitchPilotWorkspace({
             </div>
           )}
 
-          {/* Row 1: Metric cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard label="Prospects saved" value={prospects.length} badge={`+${prospects.filter(p => new Date(p.created_at) > new Date(Date.now() - 30*86400000)).length} this month`} bg="bg-[#E2F4C5]" textColor="text-[#2D5016]" icon="◎" />
-            <MetricCard label="Pages inspected" value={analysedCount} badge={`${Math.round(analysedCount / Math.max(prospects.length, 1) * 100)}% coverage`} bg="bg-[#C1EBE1]" textColor="text-[#0D4034]" icon="🔍" />
-            <MetricCard label="Follow-ups due" value={dueCount} badge={dueCount > 0 ? 'Action needed' : 'All clear'} bg="bg-[#FCD2D1]" textColor="text-[#7A1C1A]" icon="⏰" />
-            <MetricCard label="Drafts created" value={drafts.length} badge={`${new Set(drafts.map(d => d.prospect_id)).size} prospects`} bg="bg-[#D3D6FC]" textColor="text-[#2A2A7A]" icon="✉" />
-          </div>
+          {/* ── Lead Discovery view ── */}
+          {activeNav === 'discover' && (
+            <LeadDiscovery onSaveAsProspect={saveDiscoveredLead} />
+          )}
 
-          {/* Row 2: Charts */}
-          <div className="mt-5 grid gap-5 lg:grid-cols-[2fr_3fr]">
-            <DonutChart data={pipelineData.length ? pipelineData : [{ name: 'No data yet', value: 1 }]} />
-            <SalesBarChart data={barData} />
-          </div>
+          {/* ── Dashboard view: metrics + charts only ── */}
+          {activeNav === 'dashboard' && (
+            <>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label="Prospects saved" value={prospects.length} badge={`+${prospects.filter(p => new Date(p.created_at) > new Date(Date.now() - 30*86400000)).length} this month`} bg="bg-[#E2F4C5]" textColor="text-[#2D5016]" icon="◎" />
+                <MetricCard label="Pages inspected" value={analysedCount} badge={`${Math.round(analysedCount / Math.max(prospects.length, 1) * 100)}% coverage`} bg="bg-[#C1EBE1]" textColor="text-[#0D4034]" icon="🔍" />
+                <MetricCard label="Follow-ups due" value={dueCount} badge={dueCount > 0 ? 'Action needed' : 'All clear'} bg="bg-[#FCD2D1]" textColor="text-[#7A1C1A]" icon="⏰" />
+                <MetricCard label="Drafts created" value={drafts.length} badge={`${new Set(drafts.map(d => d.prospect_id)).size} prospects`} bg="bg-[#D3D6FC]" textColor="text-[#2A2A7A]" icon="✉" />
+              </div>
+              <div className="mt-5 grid gap-5 lg:grid-cols-[2fr_3fr]">
+                <DonutChart data={pipelineData.length ? pipelineData : [{ name: 'No data yet', value: 1 }]} />
+                <SalesBarChart data={barData} />
+              </div>
+              {/* Quick prospect list on dashboard */}
+              <div className="mt-5 glass-card rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-bold text-[#111827]">Recent prospects</h2>
+                  <button type="button" onClick={() => setActiveNav('prospects')} className="text-xs font-semibold text-[#0B3C37] hover:underline">View all →</button>
+                </div>
+                {prospects.length === 0 ? (
+                  <p className="text-sm text-[#9CA3AF]">No prospects yet. <button type="button" onClick={() => setActiveNav('discover')} className="text-[#0B3C37] underline">Discover leads</button> or <button type="button" onClick={() => { setEditing(undefined); setShowEditor(true) }} className="text-[#0B3C37] underline">add one manually</button>.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {prospects.slice(0, 5).map((p) => (
+                      <div key={p.id} className="flex items-center justify-between rounded-xl border border-[#E5E7EB] px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-sm text-[#111827]">{p.business_name}</p>
+                          <p className="truncate text-xs text-[#9CA3AF]">{p.website_url ?? 'No URL'}</p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-4">
+                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${statusColors[p.status] ?? 'bg-gray-100 text-gray-600'}`}>{statusLabels[p.status] ?? p.status}</span>
+                          <button type="button" onClick={() => { setSelectedId(p.id); setAnalysis(initialAnalyses.map(parseStoredAnalysis).find((a) => a?.prospect_id === p.id) ?? null); setActiveNav('prospects') }} className="text-xs font-semibold text-[#0B3C37] hover:underline">Open →</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
-          {/* Row 3: Prospect table + detail */}
-          <div className="mt-5 grid items-start gap-5 xl:grid-cols-[320px_1fr]">
+          {/* ── Prospects view: list + detail ── */}
+          {(activeNav === 'prospects' || activeNav === 'outreach' || activeNav === 'pipeline' || activeNav === 'activity') && (
+          <div className="grid items-start gap-5 xl:grid-cols-[320px_1fr]">
 
             {/* Prospect list */}
             <div className="glass-card rounded-2xl p-5">
@@ -853,7 +922,7 @@ export function PitchPilotWorkspace({
                     )}
 
                     <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-[#E5E7EB] pt-5">
-                      <button type="button" className={btnPrimary} disabled={working || !selected.website_url} onClick={() => void analyze()}>
+                      <button type="button" className={btnPrimary} disabled={working || !selected.website_url} onClick={() => { void analyze().catch((e: unknown) => setNotice(e instanceof Error ? e.message : 'Analyze failed.')) }}>
                         {working ? '⟳ Inspecting…' : '🔍 Inspect website'}
                       </button>
                       <label className="flex items-center gap-2 text-sm text-[#6B7280]">
@@ -863,13 +932,17 @@ export function PitchPilotWorkspace({
                           className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#111827]"
                           value={selected.status}
                           onChange={async (e) => {
-                            const response = await fetch(`/api/prospects/${selected.id}`, {
-                              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ status: e.target.value }),
-                            })
-                            if (!response.ok) { setNotice(await responseError(response)); return }
-                            setProspects((cur) => cur.map((p) => p.id === selected.id ? { ...p, status: e.target.value } : p))
-                            setNotice('Stage updated.')
+                            try {
+                              const response = await fetch(`/api/prospects/${selected.id}`, {
+                                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: e.target.value }),
+                              })
+                              if (!response.ok) { setNotice(await responseError(response)); return }
+                              setProspects((cur) => cur.map((p) => p.id === selected.id ? { ...p, status: e.target.value } : p))
+                              setNotice('Stage updated.')
+                            } catch (err) {
+                              setNotice(err instanceof Error ? err.message : 'Could not update stage.')
+                            }
                           }}
                         >
                           {Object.entries(statusLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -964,6 +1037,16 @@ export function PitchPilotWorkspace({
               )}
             </div>
           </div>
+          )}
+
+          {/* ── Settings view ── */}
+          {activeNav === 'profile' && (
+            <div className="glass-card rounded-2xl p-8 max-w-xl">
+              <h2 className="font-bold text-lg text-[#111827] mb-1">Workspace settings</h2>
+              <p className="text-sm text-[#6B7280] mb-6">Update your agency profile to keep outreach personalised.</p>
+              <p className="text-sm text-[#374151]">To update your profile, sign out and complete onboarding again, or contact support.</p>
+            </div>
+          )}
         </main>
       </div>
 
