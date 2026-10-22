@@ -40,11 +40,11 @@ export function LeadDiscovery({ onSaveAsProspect }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: query.trim() }),
       })
-      const data = await response.json() as { leads?: DiscoveredLead[]; error?: string }
+      const data = await response.json() as { leads?: DiscoveredLead[]; error?: string; hint?: string }
       if (!response.ok) throw new Error(data.error ?? 'Search failed.')
       setLeads(data.leads ?? [])
       setLastQuery(query.trim())
-      if ((data.leads ?? []).length === 0) setError('No leads found for this search. Try a different query.')
+      if ((data.leads ?? []).length === 0) setError('No leads found. Try a broader search term.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed.')
     } finally {

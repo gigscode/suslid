@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import * as cheerio from 'cheerio'
 
 export const runtime = 'nodejs'
-export const maxDuration = 20
+export const maxDuration = 25
 
 export interface DiscoveredLead {
   title: string
@@ -12,88 +12,127 @@ export interface DiscoveredLead {
   domain: string
 }
 
-// Hardcoded safe DuckDuckGo HTML endpoint — never resolves to a private IP
-const DDG_HOST = 'html.duckduckgo.com'
-const DDG_PATH = '/html/'
-
 function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
 }
+
+const BLOCKED_DOMAINS = [
+  'google.', 'bing.', 'yahoo.', 'duckduckgo.', 'youtube.', 'facebook.',
+  'twitter.', 'x.com', 'wikipedia.', 'reddit.', 'linkedin.',
+  'tiktok.', 'instagram.', 'pinterest.',
+]
 
 function isUsableUrl(url: string): boolean {
   try {
     const u = new URL(url)
-    // Only public HTTP/HTTPS, no DDG internal links
     if (!['http:', 'https:'].includes(u.protocol)) return false
-    if (u.hostname.includes('duckduckgo.com')) return false
-    if (u.hostname.includes('google.com')) return false
-    if (u.hostname.includes('bing.com')) return false
-    if (u.hostname.includes('youtube.com')) return false
-    if (u.hostname.includes('facebook.com')) return false
-    if (u.hostname.includes('twitter.com')) return false
-    if (u.hostname.includes('wikipedia.org')) return false
-    return true
-  } catch {
-    return false
-  }
+    return !BLOCKED_DOMAINS.some((d) => u.hostname.includes(d))
+  } catch { return false }
 }
 
-async function searchDuckDuckGo(query: string): Promise<DiscoveredLead[]> {
-  const params = new URLSearchParams({ q: query, kl: 'us-en' })
+// ── Strategy 1: LangSearch (free, no credit card, resets daily) ──────────
+// https://langsearch.com — get a free key at https://langsearch.com/dashboard
+async function searchLangSearch(query: string): Promise<DiscoveredLead[]> {
+  const apiKey = process.env.LANGSEARCH_API_KEY?.trim()
+  if (!apiKey) throw new Error('LANGSEARCH_API_KEY not configured')
 
-  const response = await fetch(`https://${DDG_HOST}${DDG_PATH}?${params.toString()}`, {
-    method: 'GET',
+  const response = await fetch('https://api.langsearch.com/v1/web-search', {
+    method: 'POST',
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; SusLidResearch/1.0; +prospect lead discovery)',
-      'Accept': 'text/html,application/xhtml+xml',
-      'Accept-Language': 'en-US,en;q=0.9',
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
-    // Short timeout via AbortSignal
+    body: JSON.stringify({ query, count: 15, freshness: 'noLimit' }),
     signal: AbortSignal.timeout(12_000),
   })
 
-  if (!response.ok) {
-    throw new Error(`Search returned status ${response.status}`)
+  if (!response.ok) throw new Error(`LangSearch returned ${response.status}`)
+
+  const data = await response.json() as {
+    data?: {
+      webPages?: {
+        value?: Array<{ name: string; url: string; snippet?: string }>
+      }
+    }
   }
 
+  const results = data.data?.webPages?.value ?? []
+  const seen = new Set<string>()
+  const leads: DiscoveredLead[] = []
+
+  for (const r of results) {
+    if (!r.url || !isUsableUrl(r.url)) continue
+    const domain = extractDomain(r.url)
+    if (seen.has(domain)) continue
+    seen.add(domain)
+    leads.push({ title: r.name, url: r.url, snippet: r.snippet ?? '', domain })
+  }
+
+  return leads.slice(0, 12)
+}
+
+// ── Strategy 2: DuckDuckGo HTML (works on localhost, may be blocked in prod) ─
+async function searchDuckDuckGo(query: string): Promise<DiscoveredLead[]> {
+  const params = new URLSearchParams({ q: query, kl: 'us-en' })
+
+  const response = await fetch(`https://html.duckduckgo.com/html/?${params}`, {
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'identity',
+    },
+    signal: AbortSignal.timeout(10_000),
+  })
+
+  if (!response.ok) throw new Error(`DDG returned ${response.status}`)
+
   const html = await response.text()
+  if (html.includes('captcha') || html.length < 500) {
+    throw new Error('DDG blocked this request')
+  }
+
   const $ = cheerio.load(html)
   const leads: DiscoveredLead[] = []
   const seen = new Set<string>()
 
-  // DuckDuckGo HTML result structure: .result__body or .result
   $('div.result, .web-result').each((_, el) => {
     const titleEl = $(el).find('a.result__a, h2 a').first()
-    const snippetEl = $(el).find('a.result__snippet, .result__snippet, .result__body').first()
-
+    const snippetEl = $(el).find('a.result__snippet, .result__snippet').first()
     const rawHref = titleEl.attr('href') ?? ''
     const title = titleEl.text().trim()
     const snippet = snippetEl.text().trim()
 
-    // DDG wraps URLs in a redirect — try to extract the real URL
     let url = rawHref
     try {
-      const parsed = new URL(rawHref, `https://${DDG_HOST}`)
-      // DDG redirect format: /l/?uddg=<encoded_url>
+      const parsed = new URL(rawHref, 'https://html.duckduckgo.com')
       const uddg = parsed.searchParams.get('uddg')
       if (uddg) url = decodeURIComponent(uddg)
-    } catch {
-      // keep raw href
-    }
+    } catch { /* keep raw */ }
 
     if (!title || !url || !isUsableUrl(url)) return
     const domain = extractDomain(url)
     if (seen.has(domain)) return
     seen.add(domain)
-
     leads.push({ title, url, snippet, domain })
   })
 
+  if (leads.length === 0) throw new Error('DDG returned no results')
   return leads.slice(0, 12)
+}
+
+// ── Main: LangSearch first, DDG fallback ─────────────────────────────────
+async function search(query: string): Promise<DiscoveredLead[]> {
+  if (process.env.LANGSEARCH_API_KEY?.trim()) {
+    try {
+      const results = await searchLangSearch(query)
+      if (results.length > 0) return results
+    } catch (err) {
+      console.warn('LangSearch failed, falling back to DDG:', err instanceof Error ? err.message : err)
+    }
+  }
+  return searchDuckDuckGo(query)
 }
 
 export async function POST(request: Request) {
@@ -104,9 +143,8 @@ export async function POST(request: Request) {
   }
 
   let body: unknown
-  try { body = await request.json() } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON.' }, { status: 400 })
-  }
+  try { body = await request.json() }
+  catch { return NextResponse.json({ error: 'Request body must be valid JSON.' }, { status: 400 }) }
 
   const payload = body && typeof body === 'object' ? body as Record<string, unknown> : {}
   const query = typeof payload.query === 'string' ? payload.query.trim() : ''
@@ -119,13 +157,20 @@ export async function POST(request: Request) {
   }
 
   try {
-    const leads = await searchDuckDuckGo(query)
+    const leads = await search(query)
     return NextResponse.json({ leads, query })
   } catch (err) {
-    console.error('Lead discovery failed:', err)
-    if (err instanceof Error && err.name === 'TimeoutError') {
+    console.error('Lead discovery failed:', err instanceof Error ? err.message : err)
+
+    const msg = err instanceof Error ? err.message : ''
+    if (msg.includes('TimeoutError') || msg.includes('timeout')) {
       return NextResponse.json({ error: 'Search timed out. Try again.' }, { status: 504 })
     }
-    return NextResponse.json({ error: 'Could not search for leads right now. Try again.' }, { status: 502 })
+    if (msg.includes('blocked') || msg.includes('captcha')) {
+      return NextResponse.json({
+        error: 'Search is unavailable in production. Add LANGSEARCH_API_KEY to your Vercel environment — it is free with no credit card required.',
+      }, { status: 503 })
+    }
+    return NextResponse.json({ error: 'Search failed. Try again.' }, { status: 502 })
   }
 }
