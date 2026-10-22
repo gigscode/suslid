@@ -514,8 +514,16 @@ export function PitchPilotWorkspace({
                     <button type="button" disabled={working} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-50 disabled:opacity-50" onClick={() => void deleteProspect(selected)}>Delete</button>
                   </div>
                 </div>
+                {selected.website_url && !analysis && (
+                  <div className="mt-4 rounded-xl border border-teal-800/20 bg-teal-50 px-4 py-3 text-sm text-teal-900">
+                    <span className="font-semibold">Ready to inspect.</span> Click &ldquo;Inspect website&rdquo; to fetch this page, surface grounded observations, and generate a personalized outreach draft.
+                  </div>
+                )}
+                {!selected.website_url && (
+                  <p className="mt-3 inline-block rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-700">Add a website URL above to enable website inspection.</p>
+                )}
                 <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center">
-                  <button type="button" className={buttonClass} disabled={working || !selected.website_url} onClick={() => void analyze()}>{working ? 'Working…' : 'Analyze a prospect'}</button>
+                  <button type="button" className={buttonClass} disabled={working || !selected.website_url} onClick={() => void analyze()}>{working ? 'Inspecting…' : 'Inspect website'}</button>
                   <label className="flex items-center gap-2 text-sm text-slate-600">Stage
                     <select aria-label="Prospect stage" className="min-h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm" value={selected.status} onChange={async (event) => {
                       const response = await fetch(`/api/prospects/${selected.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: event.target.value }) })

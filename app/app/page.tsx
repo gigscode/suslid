@@ -39,6 +39,15 @@ export default async function AppPage() {
       }
     : null
   const loadError = profileResult.error || prospectsResult.error || draftsResult.error || activitiesResult.error || analysesResult.error
+  if (loadError) {
+    console.error('Supabase query error in /app:', {
+      profile: profileResult.error?.message,
+      prospects: prospectsResult.error?.message,
+      drafts: draftsResult.error?.message,
+      activities: activitiesResult.error?.message,
+      analyses: analysesResult.error?.message,
+    })
+  }
 
   return (
     <>

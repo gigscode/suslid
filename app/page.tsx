@@ -10,7 +10,7 @@ const steps = [
   {
     number: '02',
     title: 'Find a reason to contact them',
-    body: 'SusLid safely analyzes accessible page content and surfaces verifiable observations like weak calls to action, missing service pages, or outdated copy.',
+    body: 'SusLid fetches the public website page, extracts readable content, and surfaces verifiable observations like weak calls to action, missing service pages, or outdated copy.',
   },
   {
     number: '03',

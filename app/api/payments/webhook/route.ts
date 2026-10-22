@@ -1,3 +1,5 @@
+// Payment gateway disabled — uncomment to re-enable
+/*
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -51,4 +53,12 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ received: true })
 }
+*/
 
+import { NextResponse } from 'next/server'
+
+export const runtime = 'nodejs'
+
+export async function POST() {
+  return NextResponse.json({ error: 'Payments are not currently enabled.' }, { status: 503 })
+}
