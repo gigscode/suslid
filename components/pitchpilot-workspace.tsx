@@ -16,6 +16,7 @@ import { OutreachView } from '@/components/views/outreach-view'
 import { PipelineView } from '@/components/views/pipeline-view'
 import { ActivityView } from '@/components/views/activity-view'
 import type { DiscoveredLead } from '@/app/api/leads/discover/route'
+import type { PersonLead } from '@/app/api/leads/people/route'
 
 type Prospect = Database['public']['Tables']['prospects']['Row']
 type Draft = Database['public']['Tables']['outreach_drafts']['Row']
@@ -684,15 +685,31 @@ export function PitchPilotWorkspace({
     } finally { setWorking(false) }
   }
 
-  async function saveDiscoveredLead(lead: DiscoveredLead) {
+  async function saveDiscoveredLead(lead: DiscoveredLead | PersonLead) {
+    // PersonLead has a `source` field; DiscoveredLead has `domain`
+    const isPersonLead = 'source' in lead
+    const sourceLabel = isPersonLead
+      ? `via ${(lead as PersonLead).source}`
+      : 'via website search'
+    const websiteUrl = isPersonLead
+      ? '' // people leads link to posts, not business websites
+      : (lead as DiscoveredLead).url
+    const noteLines = [
+      `Discovered ${sourceLabel}.`,
+      lead.snippet ? `\n${lead.snippet}` : '',
+      isPersonLead && (lead as PersonLead).budget ? `\nBudget: ${(lead as PersonLead).budget}` : '',
+      isPersonLead && (lead as PersonLead).skills?.length ? `\nSkills: ${(lead as PersonLead).skills!.join(', ')}` : '',
+      `\nOriginal post: ${lead.url}`,
+    ].filter(Boolean).join('')
+
     const payload = {
       business_name: lead.title.slice(0, 160),
-      website_url: lead.url,
+      website_url: websiteUrl,
       country: '',
       industry: '',
       contact_name: '',
       contact_email: '',
-      notes: lead.snippet ? `Discovered via search.\n\n${lead.snippet}` : 'Discovered via lead search.',
+      notes: noteLines,
     }
     const response = await fetch('/api/prospects', {
       method: 'POST',

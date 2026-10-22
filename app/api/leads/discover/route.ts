@@ -46,14 +46,21 @@ async function searchLangSearch(query: string): Promise<DiscoveredLead[]> {
     signal: AbortSignal.timeout(12_000),
   })
 
-  if (!response.ok) throw new Error(`LangSearch returned ${response.status}`)
+  if (!response.ok) throw new Error(`LangSearch returned HTTP ${response.status}`)
 
   const data = await response.json() as {
+    code?: number | string
+    message?: string
     data?: {
       webPages?: {
-        value?: Array<{ name: string; url: string; snippet?: string }>
+        value?: Array<{ name: string; url: string; snippet?: string; datePublished?: string }>
       }
     }
+  }
+
+  // LangSearch wraps results — code "200" or 200 means success
+  if (String(data.code) !== '200') {
+    throw new Error(`LangSearch error: ${data.message ?? String(data.code)}`)
   }
 
   const results = data.data?.webPages?.value ?? []
@@ -160,17 +167,17 @@ export async function POST(request: Request) {
     const leads = await search(query)
     return NextResponse.json({ leads, query })
   } catch (err) {
-    console.error('Lead discovery failed:', err instanceof Error ? err.message : err)
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('Lead discovery failed:', msg)
 
-    const msg = err instanceof Error ? err.message : ''
     if (msg.includes('TimeoutError') || msg.includes('timeout')) {
       return NextResponse.json({ error: 'Search timed out. Try again.' }, { status: 504 })
     }
     if (msg.includes('blocked') || msg.includes('captcha')) {
       return NextResponse.json({
-        error: 'Search is unavailable in production. Add LANGSEARCH_API_KEY to your Vercel environment — it is free with no credit card required.',
+        error: 'Search is unavailable. Make sure LANGSEARCH_API_KEY is set in your Vercel environment variables.',
       }, { status: 503 })
     }
-    return NextResponse.json({ error: 'Search failed. Try again.' }, { status: 502 })
+    return NextResponse.json({ error: `Search failed: ${msg}` }, { status: 502 })
   }
 }
