@@ -8,6 +8,7 @@ import {
   activitySchema,
 } from '../lib/pitchpilot/validation'
 import { brand } from '../lib/pitchpilot/brand'
+import { PLANS, getPlanLimits } from '../lib/pitchpilot/pricing'
 
 describe('SusLid workflow end to end validation', () => {
   it('has brand name SusLid', () => {
@@ -135,6 +136,20 @@ describe('SusLid workflow end to end validation', () => {
       notes: '',
     }
     expect(activitySchema.safeParse(invalidActivity).success).toBe(false)
+  })
+
+  it('correctly calculates plan limits and pricing in kobo', () => {
+    expect(PLANS.free.maxAnalysesPerMonth).toBe(3)
+    expect(PLANS.free.amountKobo).toBe(0)
+    expect(PLANS.pro.maxAnalysesPerMonth).toBe(50)
+    expect(PLANS.pro.amountKobo).toBe(1500000)
+    expect(PLANS.founding.maxAnalysesPerMonth).toBe(150)
+    expect(PLANS.founding.amountKobo).toBe(3500000)
+
+    expect(getPlanLimits('free').id).toBe('free')
+    expect(getPlanLimits('pro').id).toBe('pro')
+    expect(getPlanLimits('founding').id).toBe('founding')
+    expect(getPlanLimits(null).id).toBe('free')
   })
 })
 

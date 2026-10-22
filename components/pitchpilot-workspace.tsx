@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { brand } from '@/lib/pitchpilot/brand'
 import { findingsSchema } from '@/lib/pitchpilot/validation'
 import { createClient } from '@/lib/supabase/client'
+import { PLANS, type PlanType } from '@/lib/pitchpilot/pricing'
 import type { Database } from '@/lib/supabase/database.types'
 
 type Prospect = Database['public']['Tables']['prospects']['Row']
@@ -19,6 +20,7 @@ type AgencyProfile = {
   ideal_client_description: string
   preferred_outreach_channel: 'email' | 'dm'
   offer_description: string
+  plan?: PlanType
 }
 
 const statusLabels: Record<string, string> = {
@@ -239,12 +241,16 @@ function ProspectEditor({ initial, onCancel, onSave }: {
 
 export function PitchPilotWorkspace({
   initialProfile,
+  initialPlan = 'free',
+  userEmail = '',
   initialProspects,
   initialDrafts,
   initialActivities,
   initialAnalyses,
 }: {
   initialProfile: AgencyProfile | null
+  initialPlan?: PlanType
+  userEmail?: string
   initialProspects: Prospect[]
   initialDrafts: Draft[]
   initialActivities: Activity[]
@@ -252,6 +258,9 @@ export function PitchPilotWorkspace({
 }) {
   const router = useRouter()
   const [profile, setProfile] = useState(initialProfile)
+  const [plan] = useState<PlanType>(initialPlan || initialProfile?.plan || 'free')
+  const [showPricingModal, setShowPricingModal] = useState(false)
+  const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [prospects, setProspects] = useState(initialProspects)
   const [drafts, setDrafts] = useState(initialDrafts)
   const [activities, setActivities] = useState(initialActivities)
@@ -264,6 +273,34 @@ export function PitchPilotWorkspace({
   const [analysis, setAnalysis] = useState(() => initialAnalyses.map(parseStoredAnalysis).find((item) => item?.prospect_id === initialProspects[0]?.id) ?? null)
   const [followUpNote, setFollowUpNote] = useState('')
   const [followUpDate, setFollowUpDate] = useState('')
+
+  async function handleCheckout(targetPlan: 'pro' | 'founding') {
+    setPaymentLoading(targetPlan)
+    try {
+      const response = await fetch('/api/payments/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: targetPlan }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        if (data.code === 'PAYSTACK_NOT_CONFIGURED') {
+          setNotice('Paystack secret key is not configured in .env.local (PAYSTACK_SECRET_KEY). For testing, update your plan directly in Supabase or set the key.')
+          setShowPricingModal(false)
+          return
+        }
+        throw new Error(data.error || 'Could not start checkout.')
+      }
+      if (data.authorization_url) {
+        window.location.href = data.authorization_url
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Could not initialize payment.')
+      setShowPricingModal(false)
+    } finally {
+      setPaymentLoading(null)
+    }
+  }
 
   const selected = prospects.find((item) => item.id === selectedId) ?? null
   const visibleProspects = useMemo(() => prospects.filter((item) =>
@@ -328,7 +365,14 @@ export function PitchPilotWorkspace({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prospect_id: selected.id, website_url: selected.website_url }),
       })
-      if (!response.ok) throw new Error(await responseError(response))
+      if (!response.ok) {
+        const errPayload = record(await response.json().catch(() => null))
+        if (response.status === 403 || errPayload?.code === 'LIMIT_REACHED') {
+          setShowPricingModal(true)
+          throw new Error(typeof errPayload?.error === 'string' ? errPayload.error : 'Monthly analysis limit reached. Upgrade to continue.')
+        }
+        throw new Error(typeof errPayload?.error === 'string' ? errPayload.error : 'Could not analyze this website.')
+      }
       const data = record(await response.json())
       const savedAnalysis = record(data?.analysis)
       const validated = findingsSchema.safeParse(savedAnalysis?.findings)
@@ -408,8 +452,21 @@ export function PitchPilotWorkspace({
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-8">
           <a href="/app" className="font-serif text-2xl font-semibold tracking-tight">{brand.name}<span className="ml-1 text-teal-800">.</span></a>
-          <div className="hidden text-right sm:block"><p className="text-sm font-semibold">{profile.agency_name}</p><p className="text-xs text-slate-500">Prospect workspace</p></div>
-          <button className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50" onClick={() => void signOut()}>Sign out</button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowPricingModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-teal-900/15 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-900 transition hover:bg-teal-100"
+            >
+              <span className="capitalize">{plan} plan</span>
+              {plan === 'free' && <span className="ml-1 text-teal-700 underline">Upgrade</span>}
+            </button>
+            <div className="hidden text-right sm:block">
+              <p className="text-sm font-semibold">{profile.agency_name}</p>
+              <p className="text-xs text-slate-500">Prospect workspace</p>
+            </div>
+            <button className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50" onClick={() => void signOut()}>Sign out</button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-8 sm:py-10">
@@ -513,6 +570,110 @@ export function PitchPilotWorkspace({
           </div>
         </div>
       </main>
+
+      {showPricingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs">
+          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-slate-950 p-6 text-white shadow-2xl sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-teal-400">Plans & Capacity</span>
+                <h2 className="mt-1 font-serif text-3xl font-medium">Choose your plan</h2>
+                <p className="mt-1 text-sm text-slate-400">Upgrade to analyze more prospect websites and unlock unlimited outreach drafts.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPricingModal(false)}
+                className="rounded-full bg-slate-800 p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4">
+              {/* Free Plan Card */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">Free</h3>
+                  <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs text-slate-300">Acquisition</span>
+                </div>
+                <div className="mt-2 text-3xl font-extrabold text-white">₦0</div>
+                <ul className="mt-3 space-y-1 text-sm text-slate-300">
+                  <li className="flex items-center gap-2"><span>•</span> A small number of prospect analyses (3 per month).</li>
+                  <li className="flex items-center gap-2"><span>•</span> A limited number of personalized drafts.</li>
+                  <li className="flex items-center gap-2"><span>•</span> Basic prospect tracking.</li>
+                </ul>
+                <p className="mt-3 text-xs text-slate-400">Purpose: help users experience the core result before paying.</p>
+                {plan === 'free' && (
+                  <span className="mt-3 inline-block rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-300">Current plan</span>
+                )}
+              </div>
+
+              {/* Pro Plan Card */}
+              <div className="rounded-2xl border border-emerald-500/50 bg-slate-900/90 p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">Pro</h3>
+                  <span className="rounded-full border border-emerald-500/40 bg-emerald-950 px-2.5 py-0.5 text-xs font-medium text-emerald-400">Test first</span>
+                </div>
+                <div className="mt-2 text-3xl font-extrabold text-white">
+                  ₦10,000–₦20,000<span className="text-sm font-normal text-slate-400">/month (₦15,000)</span>
+                </div>
+                <ul className="mt-3 space-y-1 text-sm text-slate-300">
+                  <li className="flex items-center gap-2"><span>•</span> More prospect analyses and outreach drafts (50 per month).</li>
+                  <li className="flex items-center gap-2"><span>•</span> Follow-up workflows and pipeline tracking.</li>
+                  <li className="flex items-center gap-2"><span>•</span> Saved templates and campaign insights.</li>
+                </ul>
+                <p className="mt-3 text-xs text-slate-400">Suggested initial pricing range to test with Nigerian freelancers and small agencies.</p>
+                <div className="mt-4">
+                  {plan === 'pro' ? (
+                    <span className="rounded-md bg-emerald-950 px-3 py-1.5 text-xs font-semibold text-emerald-400 border border-emerald-500/40">Active plan</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={paymentLoading === 'pro'}
+                      onClick={() => void handleCheckout('pro')}
+                      className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-500 disabled:opacity-50"
+                    >
+                      {paymentLoading === 'pro' ? 'Connecting to Paystack…' : 'Upgrade to Pro'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Founding Customer Plan Card */}
+              <div className="rounded-2xl border border-amber-500/40 bg-slate-900/90 p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">Founding customer plan</h3>
+                  <span className="rounded-full border border-amber-500/40 bg-amber-950 px-2.5 py-0.5 text-xs font-medium text-amber-300">Limited early cohort</span>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-amber-200">
+                  Early Cohort Access <span className="text-sm font-normal text-slate-400">(₦35,000 one-time)</span>
+                </div>
+                <ul className="mt-3 space-y-1 text-sm text-slate-300">
+                  <li className="flex items-center gap-2"><span>•</span> Early access to the product.</li>
+                  <li className="flex items-center gap-2"><span>•</span> Direct input into the roadmap.</li>
+                  <li className="flex items-center gap-2"><span>•</span> Guided onboarding and personal feedback.</li>
+                </ul>
+                <p className="mt-3 text-xs text-slate-400">Offer a genuine early-adopter price in exchange for feedback. Avoid promising features you have not built.</p>
+                <div className="mt-4">
+                  {plan === 'founding' ? (
+                    <span className="rounded-md bg-amber-950 px-3 py-1.5 text-xs font-semibold text-amber-300 border border-amber-500/40">Active plan</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={paymentLoading === 'founding'}
+                      onClick={() => void handleCheckout('founding')}
+                      className="rounded-xl border border-amber-500/50 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:opacity-50"
+                    >
+                      {paymentLoading === 'founding' ? 'Connecting to Paystack…' : 'Join Founding Cohort'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

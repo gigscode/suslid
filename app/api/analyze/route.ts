@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { analysisRequestSchema, findingsSchema } from '@/lib/pitchpilot/validation'
 import { fetchPublicWebsite, WebsiteFetchError } from '@/lib/pitchpilot/website'
+import { getPlanLimits, type PlanType } from '@/lib/pitchpilot/pricing'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -69,11 +70,32 @@ export async function POST(request: Request) {
   if (!prospect) return NextResponse.json({ error: 'Prospect not found.' }, { status: 404 })
 
   const { data: profile, error: profileError } = await supabase.from('profiles')
-    .select('agency_name, services, target_markets, ideal_client_description, offer_description, preferred_outreach_channel')
+    .select('agency_name, services, target_markets, ideal_client_description, offer_description, preferred_outreach_channel, plan')
     .eq('id', user.id)
     .maybeSingle()
   if (profileError) return NextResponse.json({ error: 'Could not load your agency profile.' }, { status: 500 })
   if (!profile?.agency_name) return NextResponse.json({ error: 'Complete agency onboarding before analyzing a prospect.' }, { status: 409 })
+
+  const startOfMonth = new Date()
+  startOfMonth.setDate(1)
+  startOfMonth.setHours(0, 0, 0, 0)
+
+  const { count: analysisCount } = await supabase
+    .from('website_analyses')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('created_at', startOfMonth.toISOString())
+
+  const planLimits = getPlanLimits(profile.plan as PlanType)
+  const used = analysisCount ?? 0
+  if (used >= planLimits.maxAnalysesPerMonth) {
+    return NextResponse.json({
+      error: `You have reached your ${planLimits.name} plan limit of ${planLimits.maxAnalysesPerMonth} analyses for this month. Upgrade to continue.`,
+      code: 'LIMIT_REACHED',
+      limit: planLimits.maxAnalysesPerMonth,
+      used,
+    }, { status: 403 })
+  }
 
   try {
     const page = await fetchPublicWebsite(parsed.data.website_url)

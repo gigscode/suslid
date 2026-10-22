@@ -40,6 +40,8 @@ export type Database = {
           ideal_client_description: string | null
           preferred_outreach_channel: string
           offer_description: string | null
+          plan: 'free' | 'pro' | 'founding'
+          plan_activated_at: string | null
           created_at: string
           updated_at: string
         },
@@ -56,6 +58,8 @@ export type Database = {
           ideal_client_description?: string | null
           preferred_outreach_channel?: string
           offer_description?: string | null
+          plan?: 'free' | 'pro' | 'founding'
+          plan_activated_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -209,6 +213,28 @@ export type Database = {
           notes?: string | null
           due_at?: string | null
           completed_at?: string | null
+          created_at?: string
+        }
+      >
+      payments: Table<
+        {
+          id: string
+          user_id: string
+          paystack_reference: string
+          amount_kobo: number
+          currency: string
+          status: 'pending' | 'success' | 'failed'
+          plan: 'pro' | 'founding'
+          created_at: string
+        },
+        {
+          id?: string
+          user_id: string
+          paystack_reference: string
+          amount_kobo: number
+          currency?: string
+          status?: 'pending' | 'success' | 'failed'
+          plan?: 'pro' | 'founding'
           created_at?: string
         }
       >

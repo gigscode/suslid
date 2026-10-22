@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-const profileFields = 'agency_name, agency_type, services, target_markets, ideal_client_description, preferred_outreach_channel, offer_description'
+const profileFields = 'agency_name, agency_type, services, target_markets, ideal_client_description, preferred_outreach_channel, offer_description, plan'
 
 export default async function AppPage() {
   const supabase = await createClient()
@@ -23,6 +23,7 @@ export default async function AppPage() {
   ])
 
   const profile = profileResult.data
+  const userPlan = (profile?.plan as 'free' | 'pro' | 'founding') ?? 'free'
   const agencyProfile = profile?.agency_name &&
     ['branding', 'design', 'web', 'marketing', 'other'].includes(profile.agency_type ?? '') &&
     ['email', 'dm'].includes(profile.preferred_outreach_channel)
@@ -34,6 +35,7 @@ export default async function AppPage() {
         ideal_client_description: profile.ideal_client_description ?? '',
         preferred_outreach_channel: profile.preferred_outreach_channel as 'email' | 'dm',
         offer_description: profile.offer_description ?? '',
+        plan: userPlan,
       }
     : null
   const loadError = profileResult.error || prospectsResult.error || draftsResult.error || activitiesResult.error || analysesResult.error
@@ -45,6 +47,8 @@ export default async function AppPage() {
       </div>}
       <PitchPilotWorkspace
         initialProfile={agencyProfile}
+        initialPlan={userPlan}
+        userEmail={user.email ?? ''}
         initialProspects={prospectsResult.data ?? []}
         initialDrafts={draftsResult.data ?? []}
         initialActivities={activitiesResult.data ?? []}
