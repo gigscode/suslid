@@ -47,43 +47,67 @@
 
 :root {
   color-scheme: light;
-  --background: #fbfaf7;
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: #573da5;
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: #573da5;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* ── SusLid Design System ── */
+  --ds-bg:           #F4F8F8;       /* ice-blue/mint-gray page bg */
+  --ds-surface:      #FFFFFF;       /* card / panel surface */
+  --ds-sidebar:      #0B3C37;       /* deep forest green sidebar */
+  --ds-sidebar-text: #FFFFFF;
+
+  --ds-lime-bg:      #E2F4C5;
+  --ds-lime-text:    #2D5016;
+  --ds-mint-bg:      #C1EBE1;
+  --ds-mint-text:    #0D4034;
+  --ds-pink-bg:      #FCD2D1;
+  --ds-pink-text:    #7A1C1A;
+  --ds-lavender-bg:  #D3D6FC;
+  --ds-lavender-text:#2A2A7A;
+
+  --ds-heading:      #111827;
+  --ds-body:         #374151;
+  --ds-muted:        #6B7280;
+  --ds-border:       #E5E7EB;
+
+  /* shadcn tokens remapped */
+  --background:            var(--ds-bg);
+  --foreground:            var(--ds-heading);
+  --card:                  var(--ds-surface);
+  --card-foreground:       var(--ds-heading);
+  --popover:               var(--ds-surface);
+  --popover-foreground:    var(--ds-heading);
+  --primary:               #0B3C37;
+  --primary-foreground:    #FFFFFF;
+  --secondary:             #F4F8F8;
+  --secondary-foreground:  var(--ds-heading);
+  --muted:                 #F4F8F8;
+  --muted-foreground:      var(--ds-muted);
+  --accent:                #C1EBE1;
+  --accent-foreground:     var(--ds-mint-text);
+  --destructive:           #ef4444;
+  --border:                var(--ds-border);
+  --input:                 var(--ds-border);
+  --ring:                  #0B3C37;
+  --radius:                1rem;
+
+  --chart-1: #E2F4C5;
+  --chart-2: #C1EBE1;
+  --chart-3: #FCD2D1;
+  --chart-4: #D3D6FC;
+  --chart-5: #0B3C37;
+
+  --sidebar:                      var(--ds-sidebar);
+  --sidebar-foreground:           var(--ds-sidebar-text);
+  --sidebar-primary:              #0B3C37;
+  --sidebar-primary-foreground:   #FFFFFF;
+  --sidebar-accent:               rgba(255,255,255,0.12);
+  --sidebar-accent-foreground:    #FFFFFF;
+  --sidebar-border:               rgba(255,255,255,0.08);
+  --sidebar-ring:                 rgba(255,255,255,0.3);
 }
 
 @layer base {
   html {
-    background: #fbfaf7;
+    background: var(--ds-bg);
     scroll-behavior: smooth;
   }
   * {
@@ -91,22 +115,18 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-poppins), sans-serif;
-    font-weight: 500;
+    font-family: var(--font-plus-jakarta), var(--font-poppins), 'Inter', sans-serif;
+    font-weight: 400;
     letter-spacing: -0.01em;
   }
 
-  /* Ensure all interactive elements show visible focus indicators */
   :focus-visible {
-    outline: 2px solid #573da5;
+    outline: 2px solid #0B3C37;
     outline-offset: 2px;
   }
 
-  /* Respect reduced-motion: disable transitions/animations */
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    *, *::before, *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
@@ -115,30 +135,43 @@
   }
 }
 
-/* ─────────────────────────────────────────────────────────────
-   Continuous Marquee Ticker (Right to Left)
-───────────────────────────────────────────────────────────── */
+/* ── Marquee ── */
 @keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
-
 .animate-marquee {
   display: flex;
   width: max-content;
   animation: marquee 24s linear infinite;
 }
-
-.animate-marquee:hover {
-  animation-play-state: paused;
-}
-
+.animate-marquee:hover { animation-play-state: paused; }
 .marquee-mask {
   mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
 
+/* ── Glassmorphic card ── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+/* ── Diagonal stripe pattern for bar charts ── */
+.bar-stripe {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    rgba(255,255,255,0.45) 3px,
+    rgba(255,255,255,0.45) 6px
+  );
+}
+
+/* ── Sidebar nav active pill ── */
+.nav-active {
+  background: rgba(255,255,255,0.18);
+  border-radius: 0.75rem;
+}
