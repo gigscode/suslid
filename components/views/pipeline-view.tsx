@@ -118,7 +118,7 @@ export function PipelineView({ prospects, onStageChange, onOpenProspect }: Props
         </div>
       </div>
 
-      {/* Kanban board — horizontal scroll on mobile */}
+      {/* Kanban board, horizontal scroll on mobile */}
       <div className="overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max">
           {STAGES.map((stage) => {

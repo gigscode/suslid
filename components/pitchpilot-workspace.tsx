@@ -759,13 +759,13 @@ export function PitchPilotWorkspace({
             aria-label="Open navigation"
           >☰</button>
 
-          {/* Welcome — truncates gracefully on mobile */}
+          {/* Welcome, truncates gracefully on mobile */}
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9CA3AF]">Prospect workspace</p>
             <h1 className="truncate text-base font-bold text-[#111827] sm:text-lg">Welcome, {profile.agency_name}!</h1>
           </div>
 
-          {/* Search — hidden on small, visible md+ */}
+          {/* Search, hidden on small, visible md+ */}
           <div className="hidden max-w-xs flex-1 md:block">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]">🔍</span>

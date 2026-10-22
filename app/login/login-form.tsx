@@ -15,7 +15,7 @@ const COPY = {
   },
   'sign-up': {
     heading: 'Start for free',
-    subtitle: 'Save the businesses you want to help and make your outreach more considered.',
+    subtitle: 'Find prospects, spot what their site is missing, and send a pitch that is grounded in real evidence.',
     cta: 'Create account',
   },
   'reset-request': {
@@ -117,21 +117,23 @@ export function LoginForm({
   return (
     <div className="min-h-screen bg-[#F4F8F8]">
 
-      {/* ── Sticky top nav ── */}
-      <header className="sticky top-0 z-40 w-full border-b border-[#E5E7EB] bg-white/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-          <BrandLogo size="md" />
+      {/* ── Floating nav ── */}
+      <div className="fixed top-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-4xl -translate-x-1/2">
+        <div className="flex items-center justify-between rounded-2xl border border-[#E5E7EB] bg-white/90 px-5 py-3 shadow-lg shadow-black/5 backdrop-blur-md sm:px-6">
+          <BrandLogo size="sm" />
           <nav className="flex items-center gap-3">
             <Link href="/" className="text-sm font-medium text-[#6B7280] hover:text-[#111827]">Home</Link>
             <Link
               href={mode === 'sign-in' ? '/login?mode=sign-up' : '/login'}
-              className="rounded-full bg-[#0B3C37] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#0d4a44]"
+              className="rounded-full bg-[#0B3C37] px-4 py-2 text-sm font-bold text-white hover:bg-[#0d4a44]"
             >
               {mode === 'sign-in' ? 'Create account' : 'Sign in'}
             </Link>
           </nav>
         </div>
-      </header>
+      </div>
+      {/* Spacer */}
+      <div className="h-20" aria-hidden="true" />
 
       {/* ── Main content ── */}
       <main className="flex min-h-[calc(100vh-73px)] items-center justify-center px-4 py-12">
@@ -145,11 +147,8 @@ export function LoginForm({
 
             <div className="px-7 pb-8 pt-8 sm:px-10">
 
-              {/* Logo + heading */}
+              {/* Heading */}
               <div className="mb-7 text-center">
-                <div className="mb-5 flex justify-center">
-                  <BrandLogo size="lg" href="" />
-                </div>
                 <h1 className="text-2xl font-extrabold tracking-tight text-[#111827]">{copy.heading}</h1>
                 <p className="mt-2 text-sm leading-6 text-[#6B7280]">{copy.subtitle}</p>
               </div>
