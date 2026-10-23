@@ -1,0 +1,13 @@
+# railway.toml — tells Railway how to deploy this service
+# Railway reads this file automatically when you connect your repo
+
+[build]
+# Use our Dockerfile to build the app
+dockerfilePath = "scraper/Dockerfile"
+
+[deploy]
+# Check /health every 30 seconds to make sure the server is running
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
