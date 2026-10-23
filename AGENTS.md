@@ -22,6 +22,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 2. **Mandatory Web Grounding**: Before making any claim about a third-party platform, API, pricing, availability, or technical capability — search the web first. This is not optional. The current year is 2026 and the landscape changes fast. Claims made from training data alone are often wrong.
 3. **Uncertainty Calibration**: Explicitly flag when data is scarce, conflicting, or changing rapidly.
 4. **Platform facts verified as of October 2026** (re-verify before acting on these):
+   - **Upwork RSS**: Permanently shut down August 20, 2024. Returns 403. Use their public job search HTML pages or third-party scrapers instead.
+   - **RemoteJobs.org**: Free JSON API, no key, returns remote jobs worldwide. Works from any server IP.
+   - **Arbeitnow.com**: Free, keyless JSON API aggregating jobs from Greenhouse, SmartRecruiters, Join.com, TeamTailor. Works from any server IP.
    - **Reddit**: Shut down unauthenticated `.json` scraping on May 28, 2026. New public API registrations close October 31, 2026. Full public API shutdown is March 2027. Any Reddit scraping now requires OAuth authentication and approved API access.
    - **Twitter/X**: No free read tier exists. The official API is pay-per-use at $0.005 per post read. The free tier is write-only. Scraping without the API is technically possible but X actively rotates its internals to break scrapers.
    - **LinkedIn**: Proxycurl, the dominant LinkedIn scraping API, shut down permanently on July 4, 2026 after LinkedIn sued them. Datacenter IPs are completely blocked. Residential proxies with approved tools are the only viable path.

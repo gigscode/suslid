@@ -1,8 +1,7 @@
 """
-Upwork scraper using plain HTTP.
-
-Upwork's RSS feed at /ab/feed/jobs/rss works without a browser.
-We parse the XML directly — much lighter than Playwright.
+Upwork scraper — NOTE: Upwork killed their RSS feed on August 20, 2024.
+This module now scrapes Upwork's public job search pages directly using httpx.
+No RSS, no login required for public listings.
 """
 
 import re
@@ -11,8 +10,13 @@ from bs4 import BeautifulSoup
 from .models import PersonLead
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; SusLidResearch/1.0)",
-    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
 
@@ -21,17 +25,9 @@ def _extract_budget(text: str) -> str | None:
     return m.group(0).strip() if m else None
 
 
-def _extract_skills(text: str) -> list[str]:
-    m = re.search(r"Skills?[:\s]+([^\n<]{5,100})", text, re.IGNORECASE)
-    if m:
-        return [s.strip() for s in m.group(1).split(",") if s.strip()][:5]
-    return []
-
-
 async def search_upwork(query: str, proxy: str | None = None) -> list[PersonLead]:
     results: list[PersonLead] = []
-    rss_url = f"https://www.upwork.com/ab/feed/jobs/rss?q={query.replace(' ', '+')}&sort=recency"
-
+    url = f"https://www.upwork.com/nx/search/jobs/?nq={query.replace(' ', '%20')}&sort=recency"
     proxies = {"http://": proxy, "https://": proxy} if proxy else None
 
     try:
@@ -41,52 +37,37 @@ async def search_upwork(query: str, proxy: str | None = None) -> list[PersonLead
             timeout=15.0,
             proxies=proxies,
         ) as client:
-            response = await client.get(rss_url)
-            response.raise_for_status()
+            response = await client.get(url)
+            if response.status_code != 200:
+                print(f"[Upwork] HTTP {response.status_code}")
+                return results
 
-        soup = BeautifulSoup(response.text, "xml")
-        items = soup.find_all("item")
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        for item in items[:15]:
+        # Upwork job cards in their HTML search page
+        cards = soup.select("article.job-tile, [data-ev-job-uid], .job-tile")
+
+        for card in cards[:12]:
             try:
-                title = item.find("title")
-                link = item.find("link")
-                description = item.find("description")
-                pub_date = item.find("pubDate")
-
-                if not title or not link:
+                title_el = card.select_one("h2 a, h3 a, .job-tile-title a")
+                if not title_el:
                     continue
+                title = title_el.get_text(strip=True)
+                href = title_el.get("href", "")
+                url_full = href if href.startswith("http") else f"https://www.upwork.com{href}"
 
-                title_text = title.get_text(strip=True)
-                link_text = link.get_text(strip=True)
+                desc_el = card.select_one(".job-description, .description")
+                snippet = desc_el.get_text(strip=True)[:280] if desc_el else ""
 
-                # Clean HTML from description
-                desc_text = ""
-                if description:
-                    raw = description.get_text()
-                    desc_soup = BeautifulSoup(raw, "html.parser")
-                    desc_text = desc_soup.get_text(separator=" ", strip=True)[:280]
-
-                posted_at = None
-                if pub_date:
-                    try:
-                        from datetime import datetime
-                        dt = datetime.strptime(
-                            pub_date.get_text(strip=True),
-                            "%a, %d %b %Y %H:%M:%S %z"
-                        )
-                        posted_at = dt.strftime("%b %d, %Y")
-                    except Exception:
-                        pass
+                budget_el = card.select_one(".budget, .js-budget, [data-test='budget']")
+                budget = budget_el.get_text(strip=True)[:40] if budget_el else _extract_budget(snippet)
 
                 results.append(PersonLead(
                     source="upwork",
-                    title=title_text,
-                    url=link_text,
-                    snippet=desc_text,
-                    budget=_extract_budget(desc_text),
-                    skills=_extract_skills(desc_text),
-                    postedAt=posted_at,
+                    title=title,
+                    url=url_full,
+                    snippet=snippet,
+                    budget=budget,
                 ))
             except Exception:
                 continue
