@@ -1,153 +1,116 @@
 """
-Reddit scraper using Playwright.
+Reddit scraper using plain HTTP (no browser needed).
 
-Why Playwright? Reddit's HTML requires JavaScript to render fully.
-Playwright opens a real (headless) browser, waits for the page to load,
-then reads the content — just like a human would.
+old.reddit.com renders full HTML without JavaScript — so we can
+use a simple HTTP request instead of launching a heavy browser.
+This uses far less memory and is much faster.
 """
 
 import re
-from datetime import datetime
-from playwright.async_api import async_playwright, TimeoutError as PWTimeout
+import httpx
+from bs4 import BeautifulSoup
 from .models import PersonLead
 
-
-# Subreddits where people post "I need a developer/designer"
 HIRING_SUBREDDITS = [
-    "forhire",
-    "hiring",
-    "freelance",
-    "webdev",
-    "web_design",
-    "wordpress",
-    "javascript",
-    "node",
-    "reactjs",
-    "nextjs",
+    "forhire", "hiring", "freelance", "webdev",
+    "web_design", "wordpress", "javascript", "node",
 ]
 
-# Keywords that indicate someone is HIRING (not offering services)
 HIRING_SIGNALS = [
     "[hiring]", "looking for", "need a", "need an", "seeking",
     "wanted", "help wanted", "want to hire", "hiring a", "hire a",
-    "looking to hire", "need help with", "need someone",
+    "looking to hire", "need help with", "need someone to",
 ]
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 def _is_hiring_post(title: str, subreddit: str) -> bool:
     t = title.lower()
-    if subreddit.lower() == "hiring":
+    if subreddit.lower() in ("hiring", "forhire"):
         return True
     return any(signal in t for signal in HIRING_SIGNALS)
 
 
 def _extract_budget(text: str) -> str | None:
-    # Look for dollar amounts or budget mentions
-    m = re.search(
-        r"\$[\d,]+(?:\s*[-–]\s*\$[\d,]+)?|budget[:\s]+\$?[\d,]+",
-        text,
-        re.IGNORECASE,
-    )
+    m = re.search(r"\$[\d,]+(?:\s*[-–]\s*\$[\d,]+)?", text, re.IGNORECASE)
     return m.group(0).strip() if m else None
 
 
 async def search_reddit(query: str, proxy: str | None = None) -> list[PersonLead]:
-    """
-    Search Reddit for hiring posts matching the query.
-    Uses old.reddit.com — it renders without JavaScript so it's faster
-    and less likely to trigger bot detection.
-    """
     results: list[PersonLead] = []
-
-    # Build the search URL
-    # old.reddit.com is the classic version — easier to scrape
     subreddit_str = "+".join(HIRING_SUBREDDITS)
-    search_url = (
+    url = (
         f"https://old.reddit.com/r/{subreddit_str}/search"
-        f"?q={query}&restrict_sr=on&sort=new&t=month"
+        f"?q={query.replace(' ', '+')}&restrict_sr=on&sort=new&t=month"
     )
 
-    launch_args: dict = {
-        "headless": True,
-        "args": [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-        ],
-    }
-    if proxy:
-        launch_args["proxy"] = {"server": proxy}
+    proxies = {"http://": proxy, "https://": proxy} if proxy else None
 
     try:
-        async with async_playwright() as pw:
-            browser = await pw.chromium.launch(**launch_args)
-            context = await browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
-                viewport={"width": 1280, "height": 800},
-            )
-            page = await context.new_page()
+        async with httpx.AsyncClient(
+            headers=HEADERS,
+            follow_redirects=True,
+            timeout=15.0,
+            proxies=proxies,
+        ) as client:
+            response = await client.get(url)
+            response.raise_for_status()
 
-            # Block images and fonts — we only need text, this speeds things up
-            await page.route(
-                "**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf,eot}",
-                lambda r: r.abort(),
-            )
+        soup = BeautifulSoup(response.text, "html.parser")
 
-            await page.goto(search_url, timeout=20_000, wait_until="domcontentloaded")
+        # old.reddit search results are in <div class="search-result">
+        posts = soup.select(".search-result-link")
 
-            # Wait for search results to appear
+        for post in posts[:20]:
             try:
-                await page.wait_for_selector(".search-result-link", timeout=8_000)
-            except PWTimeout:
-                await browser.close()
-                return results
+                title_el = post.select_one("a.search-result-link, a[data-click-id='body']")
+                if not title_el:
+                    # fallback: the element itself might be the link
+                    title = post.get_text(strip=True)
+                    href = post.get("href", "")
+                else:
+                    title = title_el.get_text(strip=True)
+                    href = title_el.get("href", "")
 
-            posts = await page.query_selector_all(".search-result")
+                if not title or not href:
+                    continue
 
-            for post in posts[:20]:
-                try:
-                    title_el = await post.query_selector(".search-result-link")
-                    if not title_el:
-                        continue
-                    title = (await title_el.inner_text()).strip()
-                    href = await title_el.get_attribute("href") or ""
+                # Extract subreddit from URL
+                sub_match = re.search(r"/r/([^/]+)/", href)
+                subreddit = sub_match.group(1) if sub_match else ""
 
-                    subreddit_el = await post.query_selector(".search-subreddit-link")
-                    subreddit = ""
-                    if subreddit_el:
-                        subreddit = (await subreddit_el.inner_text()).strip()
-                        subreddit = subreddit.replace("r/", "")
+                if not _is_hiring_post(title, subreddit):
+                    continue
 
-                    if not _is_hiring_post(title, subreddit):
-                        continue
+                # Get snippet from the parent container
+                parent = post.find_parent(class_="search-result")
+                snippet = ""
+                if parent:
+                    body = parent.select_one(".search-result-body, .usertext-body")
+                    if body:
+                        snippet = body.get_text(strip=True)[:280]
 
-                    snippet_el = await post.query_selector(".search-result-body")
-                    snippet = ""
-                    if snippet_el:
-                        snippet = (await snippet_el.inner_text()).strip()[:280]
+                url_full = href if href.startswith("http") else f"https://old.reddit.com{href}"
 
-                    # Make sure URL is absolute
-                    url = href if href.startswith("http") else f"https://old.reddit.com{href}"
-
-                    results.append(
-                        PersonLead(
-                            source="reddit",
-                            title=title,
-                            url=url,
-                            snippet=snippet,
-                            subreddit=subreddit or None,
-                            budget=_extract_budget(snippet + " " + title),
-                        )
-                    )
-                except Exception:
-                    continue  # skip malformed posts
-
-            await browser.close()
+                results.append(PersonLead(
+                    source="reddit",
+                    title=title,
+                    url=url_full,
+                    snippet=snippet,
+                    subreddit=subreddit or None,
+                    budget=_extract_budget(snippet + " " + title),
+                ))
+            except Exception:
+                continue
 
     except Exception as e:
         print(f"[Reddit scraper] Error: {e}")
