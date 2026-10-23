@@ -40,7 +40,7 @@ async function langSearch(query: string, count = 10): Promise<LangSearchResult[]
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query, count, freshness: 'Month' }),
+    body: JSON.stringify({ query, count, freshness: 'oneMonth' }),
     signal: AbortSignal.timeout(12_000),
   })
 
@@ -94,13 +94,17 @@ async function searchPeople(query: string): Promise<PersonLead[]> {
     // Broader web — job boards, Twitter, LinkedIn posts
     {
       source: 'web' as const,
-      query: `"${q}" freelance hire 2025 (job OR project OR contract OR "work with")`,
+      query: `"${q}" freelance hire (job OR project OR contract OR "work with")`,
     },
   ]
 
   const settled = await Promise.allSettled(
     searches.map((s) => langSearch(s.query, 8).then((results) => ({ source: s.source, results })))
   )
+
+  if (settled.every((outcome) => outcome.status === 'rejected')) {
+    throw new Error('All people search requests failed.')
+  }
 
   const seen = new Set<string>()
   const leads: PersonLead[] = []
