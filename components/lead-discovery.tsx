@@ -30,7 +30,8 @@ const PEOPLE_QUERIES = [
 const SOURCE_STYLES = {
   reddit:  { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Reddit' },
   upwork:  { bg: 'bg-[#E2F4C5]',  text: 'text-[#2D5016]',  label: 'Upwork' },
-  web:     { bg: 'bg-[#D3D6FC]',  text: 'text-[#2A2A7A]',  label: 'Web' },
+  forum:   { bg: 'bg-amber-100',  text: 'text-amber-800',  label: 'Forum'  },
+  web:     { bg: 'bg-[#D3D6FC]',  text: 'text-[#2A2A7A]',  label: 'Web'   },
 }
 
 // ── Spinner ───────────────────────────────────────────────────────────────
@@ -287,7 +288,7 @@ export function LeadDiscovery({ onSaveAsProspect }: Props) {
       {mode === 'people' && peopleLeads.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <span className="text-xs text-[#9CA3AF]">Sources:</span>
-          {(['reddit', 'upwork', 'web'] as const).map((src) => {
+          {(['reddit', 'upwork', 'forum', 'web'] as const).map((src) => {
             const count = peopleLeads.filter((l) => l.source === src).length
             if (count === 0) return null
             const s = SOURCE_STYLES[src]
@@ -363,9 +364,9 @@ export function LeadDiscovery({ onSaveAsProspect }: Props) {
           ) : (
             <>
               {[
-                { bg: 'bg-orange-50', text: 'text-orange-800', icon: '🟠', title: 'Reddit hiring posts', body: 'Searches r/forhire, r/hiring, r/freelance, r/webdev and more for people actively looking.' },
-                { bg: 'bg-[#E2F4C5]', text: 'text-[#2D5016]', icon: '🟢', title: 'Upwork job feed', body: 'Live job postings on Upwork matching your skill keyword, sorted by most recent.' },
-                { bg: 'bg-[#D3D6FC]', text: 'text-[#2A2A7A]', icon: '🌐', title: 'Web hiring posts', body: 'Broader web search targeting job boards, forums, and hiring posts from the last 30 days.' },
+                { bg: 'bg-orange-50', text: 'text-orange-800', icon: '🟠', title: 'Reddit hiring posts', body: 'Searches r/forhire, r/hiring, r/freelance, r/webdev and more for people actively looking for help.' },
+                { bg: 'bg-[#E2F4C5]', text: 'text-[#2D5016]', icon: '🟢', title: 'Upwork job listings', body: 'Live job postings on Upwork matching your skill keyword.' },
+                { bg: 'bg-[#D3D6FC]', text: 'text-[#2A2A7A]', icon: '🌐', title: 'Forums and job boards', body: 'Broader search across dev communities, job boards, and hiring posts from the last 30 days.' },
               ].map((tip) => (
                 <div key={tip.title} className={`rounded-2xl p-5 ${tip.bg}`}>
                   <span className="text-2xl">{tip.icon}</span>

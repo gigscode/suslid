@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import * as cheerio from 'cheerio'
 
 export const runtime = 'nodejs'
-export const maxDuration = 25
+export const maxDuration = 30
 
 export interface PersonLead {
-  source: 'reddit' | 'upwork' | 'web'
+  source: 'reddit' | 'upwork' | 'forum' | 'web'
   title: string
   url: string
   snippet: string
@@ -16,153 +15,24 @@ export interface PersonLead {
   subreddit?: string
 }
 
-// ── Reddit search (public JSON API, no key needed) ────────────────────────
-// Targets hiring/forhire/freelance subreddits
-const HIRING_SUBREDDITS = [
-  'forhire', 'hiring', 'freelance', 'web_design', 'webdev',
-  'wordpress', 'learnprogramming', 'javascript', 'node',
-]
-
-async function searchReddit(query: string): Promise<PersonLead[]> {
-  const subredditStr = HIRING_SUBREDDITS.join('+')
-  // Reddit public search — no auth needed
-  const params = new URLSearchParams({
-    q: query,
-    sort: 'new',
-    limit: '25',
-    restrict_sr: 'true',
-    t: 'month',
-  })
-
-  const response = await fetch(
-    `https://www.reddit.com/r/${subredditStr}/search.json?${params}`,
-    {
-      headers: {
-        'User-Agent': 'SusLidLeadDiscovery/1.0 (prospect research tool)',
-        'Accept': 'application/json',
-      },
-      signal: AbortSignal.timeout(10_000),
-    }
-  )
-
-  if (!response.ok) throw new Error(`Reddit API returned ${response.status}`)
-
-  const data = await response.json() as {
-    data?: {
-      children?: Array<{
-        data: {
-          title: string
-          url: string
-          selftext: string
-          subreddit: string
-          created_utc: number
-          permalink: string
-        }
-      }>
-    }
-  }
-
-  const posts = data.data?.children ?? []
-  const leads: PersonLead[] = []
-
-  for (const { data: post } of posts) {
-    // Filter to posts that are looking for help (not offering services)
-    const titleLower = post.title.toLowerCase()
-    const isHiring = titleLower.includes('[hiring]') ||
-      titleLower.includes('looking for') ||
-      titleLower.includes('need a') ||
-      titleLower.includes('need an') ||
-      titleLower.includes('seeking') ||
-      titleLower.includes('wanted') ||
-      titleLower.includes('help wanted') ||
-      titleLower.includes('hire') ||
-      post.subreddit.toLowerCase() === 'hiring'
-
-    if (!isHiring) continue
-
-    const snippet = post.selftext?.slice(0, 280).replace(/\n+/g, ' ').trim() || post.title
-
-    leads.push({
-      source: 'reddit',
-      title: post.title,
-      url: `https://www.reddit.com${post.permalink}`,
-      snippet,
-      subreddit: post.subreddit,
-      postedAt: new Date(post.created_utc * 1000).toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric',
-      }),
-    })
-  }
-
-  return leads.slice(0, 10)
+interface LangSearchResult {
+  name: string
+  url: string
+  snippet?: string
+  datePublished?: string
 }
 
-// ── Upwork RSS feed (public, no key needed) ────────────────────────────────
-async function searchUpwork(query: string): Promise<PersonLead[]> {
-  const params = new URLSearchParams({ q: query, sort: 'recency' })
-  const rssUrl = `https://www.upwork.com/ab/feed/jobs/rss?${params}`
-
-  const response = await fetch(rssUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; SusLidResearch/1.0)',
-      'Accept': 'application/rss+xml, application/xml, text/xml',
-    },
-    signal: AbortSignal.timeout(10_000),
-  })
-
-  if (!response.ok) throw new Error(`Upwork RSS returned ${response.status}`)
-
-  const xml = await response.text()
-  const $ = cheerio.load(xml, { xmlMode: true })
-  const leads: PersonLead[] = []
-
-  $('item').each((_, el) => {
-    const title = $(el).find('title').first().text().trim()
-    const link = $(el).find('link').first().text().trim() ||
-      $(el).find('guid').first().text().trim()
-    const description = $(el).find('description').first().text()
-    const pubDate = $(el).find('pubDate').first().text().trim()
-
-    if (!title || !link) return
-
-    // Extract budget from description if present
-    const budgetMatch = description.match(/Budget:\s*([^\n<]+)/i)
-    const budget = budgetMatch?.[1]?.trim()
-
-    // Extract skills
-    const skillsMatch = description.match(/Skills:\s*([^\n<]+)/i)
-    const skills = skillsMatch?.[1]?.split(',').map((s) => s.trim()).filter(Boolean)
-
-    // Clean HTML from snippet
-    const snippet = description
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 280)
-
-    leads.push({
-      source: 'upwork',
-      title,
-      url: link,
-      snippet,
-      budget,
-      skills,
-      postedAt: pubDate ? new Date(pubDate).toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric',
-      }) : undefined,
-    })
-  })
-
-  return leads.slice(0, 10)
+interface LangSearchResponse {
+  code?: number | string
+  message?: string
+  data?: {
+    webPages?: { value?: LangSearchResult[] }
+  }
 }
 
-// ── LangSearch targeted at hiring/job boards ──────────────────────────────
-async function searchWebHiring(query: string): Promise<PersonLead[]> {
+async function langSearch(query: string, count = 10): Promise<LangSearchResult[]> {
   const apiKey = process.env.LANGSEARCH_API_KEY?.trim()
-  if (!apiKey) throw new Error('LANGSEARCH_API_KEY not configured')
-
-  // Target job boards and hiring posts specifically
-  const enhancedQuery = `"${query}" (hiring OR "looking for" OR "need a" OR "seeking" OR freelance)`
+  if (!apiKey) throw new Error('LANGSEARCH_API_KEY not set')
 
   const response = await fetch('https://api.langsearch.com/v1/web-search', {
     method: 'POST',
@@ -170,73 +40,104 @@ async function searchWebHiring(query: string): Promise<PersonLead[]> {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      query: enhancedQuery,
-      count: 10,
-      freshness: 'Month',
-    }),
+    body: JSON.stringify({ query, count, freshness: 'Month' }),
     signal: AbortSignal.timeout(12_000),
   })
 
-  if (!response.ok) throw new Error(`LangSearch returned HTTP ${response.status}`)
+  if (!response.ok) throw new Error(`LangSearch HTTP ${response.status}`)
 
-  const data = await response.json() as {
-    code?: number | string
-    message?: string
-    data?: {
-      webPages?: {
-        value?: Array<{ name: string; url: string; snippet?: string; datePublished?: string }>
-      }
-    }
-  }
-
+  const data = await response.json() as LangSearchResponse
   if (String(data.code) !== '200') {
-    throw new Error(`LangSearch error: ${data.message ?? String(data.code)}`)
+    throw new Error(`LangSearch: ${data.message ?? data.code}`)
   }
 
-  const results = data.data?.webPages?.value ?? []
+  return data.data?.webPages?.value ?? []
+}
+
+function parseDate(raw?: string): string | undefined {
+  if (!raw) return undefined
+  try {
+    return new Date(raw).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  } catch { return undefined }
+}
+
+function extractSubreddit(url: string): string | undefined {
+  const m = url.match(/reddit\.com\/r\/([^/]+)/)
+  return m?.[1]
+}
+
+function extractBudget(text: string): string | undefined {
+  const m = text.match(/\$[\d,]+(?:\s*[-–]\s*\$[\d,]+)?|\₦[\d,]+|budget[:\s]+([^\n,.]+)/i)
+  return m?.[0]?.trim()
+}
+
+// ── Run 4 targeted queries in parallel via LangSearch ─────────────────────
+async function searchPeople(query: string): Promise<PersonLead[]> {
+  const q = query.trim()
+
+  const searches = [
+    // Reddit hiring posts
+    {
+      source: 'reddit' as const,
+      query: `site:reddit.com (r/forhire OR r/hiring OR r/freelance OR r/webdev OR r/wordpress) "${q}" (hiring OR "looking for" OR "need a" OR wanted)`,
+    },
+    // Upwork job listings
+    {
+      source: 'upwork' as const,
+      query: `site:upwork.com/jobs "${q}"`,
+    },
+    // Dev/design forums and communities
+    {
+      source: 'forum' as const,
+      query: `"${q}" ("looking for" OR "need a" OR hiring OR "seeking a") (developer OR designer OR freelancer) -site:reddit.com -site:upwork.com`,
+    },
+    // Broader web — job boards, Twitter, LinkedIn posts
+    {
+      source: 'web' as const,
+      query: `"${q}" freelance hire 2025 (job OR project OR contract OR "work with")`,
+    },
+  ]
+
+  const settled = await Promise.allSettled(
+    searches.map((s) => langSearch(s.query, 8).then((results) => ({ source: s.source, results })))
+  )
+
   const seen = new Set<string>()
   const leads: PersonLead[] = []
 
-  for (const r of results) {
-    try {
-      const domain = new URL(r.url).hostname
-      if (seen.has(domain)) continue
-      seen.add(domain)
-      leads.push({
-        source: 'web',
+  for (const outcome of settled) {
+    if (outcome.status === 'rejected') {
+      console.warn('People search query failed:', outcome.reason instanceof Error ? outcome.reason.message : outcome.reason)
+      continue
+    }
+
+    const { source, results } = outcome.value
+
+    for (const r of results) {
+      if (!r.url || seen.has(r.url)) continue
+      seen.add(r.url)
+
+      const snippet = r.snippet ?? ''
+      const lead: PersonLead = {
+        source,
         title: r.name,
         url: r.url,
-        snippet: r.snippet ?? '',
-        postedAt: r.datePublished
-          ? new Date(r.datePublished).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-          : undefined,
-      })
-    } catch { /* skip invalid URLs */ }
+        snippet,
+        postedAt: parseDate(r.datePublished),
+        budget: extractBudget(snippet),
+      }
+
+      if (source === 'reddit') {
+        lead.subreddit = extractSubreddit(r.url)
+      }
+
+      leads.push(lead)
+    }
   }
 
-  return leads.slice(0, 8)
-}
-
-// ── Main: run all three in parallel ──────────────────────────────────────
-async function searchPeople(query: string): Promise<PersonLead[]> {
-  const results = await Promise.allSettled([
-    searchReddit(query),
-    searchUpwork(query),
-    searchWebHiring(query),
-  ])
-
-  const leads: PersonLead[] = []
-  for (const result of results) {
-    if (result.status === 'fulfilled') leads.push(...result.value)
-    else console.warn('People search source failed:', result.reason instanceof Error ? result.reason.message : result.reason)
-  }
-
-  // Sort: reddit + upwork first (most relevant), web last
-  leads.sort((a, b) => {
-    const order = { reddit: 0, upwork: 1, web: 2 }
-    return order[a.source] - order[b.source]
-  })
+  // Sort: reddit, upwork, forum, web
+  const order: Record<PersonLead['source'], number> = { reddit: 0, upwork: 1, forum: 2, web: 3 }
+  leads.sort((a, b) => order[a.source] - order[b.source])
 
   return leads
 }
@@ -266,7 +167,8 @@ export async function POST(request: Request) {
     const leads = await searchPeople(query)
     return NextResponse.json({ leads, query })
   } catch (err) {
-    console.error('People search failed:', err instanceof Error ? err.message : err)
-    return NextResponse.json({ error: 'Search failed. Try again.' }, { status: 502 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('People search failed:', msg)
+    return NextResponse.json({ error: `Search failed: ${msg}` }, { status: 502 })
   }
 }
